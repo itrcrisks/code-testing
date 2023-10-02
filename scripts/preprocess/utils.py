@@ -8,6 +8,7 @@ import snkit
 import numpy as np
 import pandas as pd
 import igraph as ig
+import networkx
 import geopandas as gpd
 import fiona
 from shapely.geometry import shape, mapping
