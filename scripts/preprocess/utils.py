@@ -1,6 +1,7 @@
 """Functions for preprocessing road data
     WILL MODIFY LATER
 """
+import snkit
 import sys
 import os
 import json
@@ -10,8 +11,9 @@ import pandas as pd
 import igraph as ig
 import networkx
 import geopandas as gpd
+import pyproj
 import fiona
-from shapely.geometry import shape, mapping
+from shapely.geometry import shape, mapping, LineString
 from scipy.spatial import cKDTree
 
 def components(edges,nodes,node_id_col):
