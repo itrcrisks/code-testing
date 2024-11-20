@@ -39,7 +39,7 @@ def main(config):
                                 "road_node_file.geoparquet"
                                 )
                             )                                   
-    os_nodes.rename(columns={"id","os_id"},inplace=True)
+    os_nodes.rename(columns={"id":"os_id"},inplace=True)
     os_nodes = os_nodes.to_crs(epsg=epsg_meters)
 
     network = create_network_from_nodes_and_edges(os_nodes,gb_osm_edges,"road")
@@ -58,7 +58,7 @@ def main(config):
                                 "gb_osm_os_nodes.gpq"
                                 )
                         )
-    del nodes
+    nodes.rename(columns={"id":"nid"},inplace=True)
     os_roads = gpd.read_parquet(
                             os.path.join(
                                 data_path,
@@ -79,7 +79,22 @@ def main(config):
                             "urban"
                         ]
                         ]
-    os_roads.rename(columns={"start_node":"origin_id","end_node":"destination_id"},inplace=True)
+    os_roads = pd.merge(
+                        os_roads,nodes[["os_id","nid"]],
+                        how="left",
+                        left_on=["start_node"],
+                        right_on=["os_id"])
+    os_roads.rename(columns={"nid":"origin_id"},inplace=True)
+    os_roads.drop(["start_node","os_id"],axis=1,inplace=True)
+
+    os_roads = pd.merge(
+                        os_roads,nodes[["os_id","nid"]],
+                        how="left",
+                        left_on=["end_node"],
+                        right_on=["os_id"])
+    os_roads.rename(columns={"nid":"destination_id"},inplace=True)
+    os_roads.drop(["end_node","os_id"],axis=1,inplace=True)
+
     osm_graph = create_igraph_from_dataframe(
                         edges[
                             ["from_id","to_id","id","length_m"]
@@ -87,7 +102,7 @@ def main(config):
                         )
     os_roads = network_od_paths_assembly(os_roads, osm_graph,
                                 "length_m","id")
-    os_roads.drop(["start_node","end_node","length_m"],axis=1,inplace=True)
+    os_roads.drop(["origin_id","destination_id","length_m"],axis=1,inplace=True)
     os_roads.rename(columns={"id","os_id"},inplace=True)
 
     osm_matches = [] 
