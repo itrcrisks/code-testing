@@ -35,6 +35,7 @@ def main(config):
                                 data_path,
                                 "DAFNI_NIRD",
                                 "processed_data",
+                                "networks",
                                 "road_node_file.geoparquet"
                                 )
                             )                                   
@@ -53,6 +54,7 @@ def main(config):
                                 data_path,
                                 "DAFNI_NIRD",
                                 "processed_data",
+                                "networks",
                                 "gb_osm_os_nodes.gpq"
                                 )
                         )
@@ -62,6 +64,7 @@ def main(config):
                                 data_path,
                                 "DAFNI_NIRD",
                                 "processed_data",
+                                "networks",
                                 "road_link_file.geoparquet"
                                 )
                             )
@@ -109,6 +112,7 @@ def main(config):
                                 data_path,
                                 "DAFNI_NIRD",
                                 "processed_data",
+                                "networks",
                                 "gb_osm_os_edges.gpq"
                                 )
                         )
