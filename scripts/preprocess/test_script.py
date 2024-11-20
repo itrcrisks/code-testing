@@ -42,7 +42,7 @@ def main(config):
     os_nodes.rename(columns={"id":"os_id"},inplace=True)
     os_nodes = os_nodes.to_crs(epsg=epsg_meters)
 
-    network = create_network(os_nodes,gb_osm_edges,"road")
+    network = create_network(gb_osm_edges,os_nodes,"road")
     edges = network.edges
     nodes = network.nodes
     edges, nodes = components(edges,nodes,"id")
