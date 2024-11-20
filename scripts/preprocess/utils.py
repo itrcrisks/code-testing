@@ -141,12 +141,6 @@ def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,snap_distan
     if by is not None:
         network = snkit.network.merge_edges(network,by=by)
         print ('* Done with merging network')
-
-    network.edges.rename(columns={'from_id':'from_node',
-                                'to_id':'to_node',
-                                'id':'edge_id'},
-                                inplace=True)
-    network.nodes.rename(columns={'id':'node_id'},inplace=True)
     
     return network
 
@@ -203,3 +197,61 @@ def network_od_path_estimations(graph,
 
     
     return edge_path_list, path_gcost_list
+
+def network_od_paths_assembly(points_dataframe, graph,
+                                cost_criteria,path_id_column,store_edge_path=True):
+    """Assemble estimates of OD paths, distances, times, costs and tonnages on networks
+
+    Parameters
+    ----------
+    points_dataframe : pandas.DataFrame
+        OD nodes and their tonnages
+    graph
+        igraph network structure
+    region_name : str
+        name of Province
+    excel_writer
+        Name of the excel writer to save Pandas dataframe to Excel file
+
+    Returns
+    -------
+    save_paths_df : pandas.DataFrame
+        - origin - String node ID of Origin
+        - destination - String node ID of Destination
+        - edge_path - List of string of edge ID's for paths with minimum generalised cost flows
+        - gcost - Float values of estimated generalised cost for paths with minimum generalised cost flows
+
+    """
+    save_paths = []
+    points_dataframe = points_dataframe.set_index('origin_id')
+    origins = list(set(points_dataframe.index.values.tolist()))
+    for origin in origins:
+        try:
+            destinations = list(set(points_dataframe.loc[[origin], 'destination_id'].values.tolist()))
+
+            get_path, get_gcost = network_od_path_estimations(
+                    graph, origin, destinations, cost_criteria,path_id_column)
+
+            # tons = points_dataframe.loc[[origin], tonnage_column].values
+            save_paths += list(zip([origin]*len(destinations),
+                                destinations, get_path,
+                                get_gcost))
+
+            # print(f"done with {origin}")
+        except:
+            print(f"* no path between {origin}-{destinations}")
+    
+    cols = [
+        'origin_id', 'destination_id', 'edge_path',cost_criteria
+    ]
+    save_paths_df = pd.DataFrame(save_paths, columns=cols)
+    if store_edge_path is False:
+        save_paths_df.drop("edge_path",axis=1,inplace=True)
+
+    points_dataframe = points_dataframe.reset_index()
+    save_paths_df = pd.merge(points_dataframe,save_paths_df,how='left', on=[
+                             'origin_id', 'destination_id']).fillna(0)
+
+    save_paths_df = save_paths_df[save_paths_df['origin_id'] != 0]
+
+    return save_paths_df

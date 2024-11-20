@@ -8,23 +8,111 @@ from utils import *
 
 
 def main(config):
-	incoming_data_path = config['paths']['incoming_data']
-	processed_data_path = config['paths']['data']
-	#road_edges = gpd.read_file(os.path.join(incoming_data_path,"roads","hotosm_ken_roads.gpkg"),layer = "Roads")									
-	#road_edges = road_edges[road_edges["highway"].isin(["trunk","trunk_link","primary","primary_link","secondary","secondary_link"])]
-	#road_edges.to_file(os.path.join(incoming_data_path, 'roads','sample_roads.gpkg'),layer = 'roads')
-	
-	road_edges = gpd.read_file(os.path.join(incoming_data_path, "roads","sample_roads.gpkg"),layer="roads") 
-	print (road_edges)
-	network = create_network_from_nodes_and_edges(None,road_edges,"roade")
-	edges = network.edges
-	nodes = network.nodes
-	print (edges)
-	print (nodes)
-	edges, nodes = components(edges,nodes,"node_id")
-	edges.to_file(os.path.join(incoming_data_path,"roads","roads_network.gpkg"),layer="edges",driver="GPKG")
-	nodes.to_file(os.path.join(incoming_data_path,"roads","roads_network.gpkg"),layer="nodes",driver="GPKG")
-	
+    data_path = config['paths']['data']
+    epsg_meters = 27700
+    gb_osm_edges = gpd.read_parquet(
+                            os.path.join(
+                                data_path,
+                                "miraca",
+                                "inputs",
+                                "incoming_data",
+                                "europe-latest_filter-road-tertiary",
+                                "edges.gpq"
+                                )
+                            )
+    gb_osm_edges = gb_osm_edges[
+                            (
+                                gb_osm_edges["from_iso_a3"] == "GBR"
+                            ) & (
+                                gb_osm_edges["to_iso_a3"] == "GBR"
+                            )]
+    gb_osm_edges.drop(["id","from_id","to_id"],axis=1,inplace=True)
+    gb_osm_edges = gb_osm_edges.to_crs(epsg=epsg_meters)
+    gb_osm_edges["length_m"] = gb_osm_edges.geometry.length
+    
+    os_nodes = gpd.read_parquet(
+                            os.path.join(
+                                data_path,
+                                "DAFNI_NIRD",
+                                "processed_data",
+                                "road_node_file.geoparquet"
+                                )
+                            )                                   
+    os_nodes.rename(columns={"id","os_id"},inplace=True)
+    os_nodes = os_nodes.to_crs(epsg=epsg_meters)
+
+    network = create_network_from_nodes_and_edges(os_nodes,gb_osm_edges,"road")
+    edges = network.edges
+    nodes = network.nodes
+    edges, nodes = components(edges,nodes,"id")
+    del os_nodes,gb_osm_edges
+    gpd.GeoDataFrame(
+                    nodes,geometry="geometry",crs=f"EPSG:{epsg_meters}"
+                    ).to_parquet(
+                            os.path.join(
+                                data_path,
+                                "DAFNI_NIRD",
+                                "processed_data",
+                                "gb_osm_os_nodes.gpq"
+                                )
+                        )
+    del nodes
+    os_roads = gpd.read_parquet(
+                            os.path.join(
+                                data_path,
+                                "DAFNI_NIRD",
+                                "processed_data",
+                                "road_link_file.geoparquet"
+                                )
+                            )
+    os_roads = os_roads[
+                        [
+                            "start_node","end_node",
+                            "id","fictitious",
+                            "road_classification","road_function",
+                            "form_of_way","road_classification_number",
+                            "road_structure",
+                            "average_toll_cost",
+                            "urban"
+                        ]
+                        ]
+    os_roads.rename(columns={"start_node":"origin_id","end_node":"destination_id"},inplace=True)
+    osm_graph = create_igraph_from_dataframe(
+                        edges[
+                            ["from_id","to_id","id","length_m"]
+                            ]
+                        )
+    os_roads = network_od_paths_assembly(os_roads, osm_graph,
+                                "length_m","id")
+    os_roads.drop(["start_node","end_node","length_m"],axis=1,inplace=True)
+    os_roads.rename(columns={"id","os_id"},inplace=True)
+
+    osm_matches = [] 
+    cols = [c for c in os_roads.columns.values.tolist() if c != "edge_path"]
+    for r in os_roads.itertuples():
+        rl = []
+        ep = r.edge_path
+        rl.append(ep)
+        for c in cols:
+            rl.append([getattr(r,c)]*len(ep))
+
+        osm_matches += list(zip(*rl))
+
+    osm_matches = pd.DataFrame(osm_matches,columns=["id"] + cols)
+    osm_matches.to_csv("osm_matches.csv",index=False)
+    edges = pd.merge(edges,osm_matches,how="left",on=["id"])
+
+    gpd.GeoDataFrame(
+                    edges,geometry="geometry",crs=f"EPSG:{epsg_meters}"
+                    ).to_parquet(
+                            os.path.join(
+                                data_path,
+                                "DAFNI_NIRD",
+                                "processed_data",
+                                "gb_osm_os_edges.gpq"
+                                )
+                        )
+    
 if __name__ == '__main__':
-	CONFIG = load_config() 
-	main(CONFIG)
+    CONFIG = load_config() 
+    main(CONFIG)
