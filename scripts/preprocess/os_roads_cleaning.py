@@ -25,11 +25,12 @@ def main(config):
                 if file.startswith(f"Highways_Roads_{fn}") and file.endswith(".gz"):
                     with gzip.open(os.path.join(folder_name,file), 'rb') as f:
                         df = gpd.read_file(f, driver='GML')
-                        print (df)
                         dfs.append(df)
 
         
         dfs = pd.concat(dfs,axis=0,ignore_index=True)
+        print (fn)
+        print (dfs)
 
         dfs.to_parquet(os.path.join(folder_name,f"GB_{fn}.pq"))
 
