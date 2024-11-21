@@ -33,7 +33,9 @@ def main(config):
         dfs = pd.concat(dfs,axis=0,ignore_index=True)
         print (fn)
         print (dfs)
-
+        if "roadName" in dfs.columns.values.tolist():
+            dfs["roadName"] = dfs["roadName"].astype(str)
+        
         dfs.to_parquet(os.path.join(folder_name,f"GB_{fn}.pq"))
 
 if __name__ == '__main__':
