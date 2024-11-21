@@ -26,6 +26,7 @@ def main(config):
                 if file.startswith(f"Highways_Roads_{fn}") and file.endswith(".gz"):
                     with gzip.open(os.path.join(folder_name,file), 'rb') as f:
                         df = gpd.read_file(f, driver='GML')
+                        print (dfs)
                         dfs.append(df)
 
         
