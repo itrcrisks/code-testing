@@ -18,7 +18,7 @@ def main(config):
                             "MasterMap Highways Network_roads_5731659"
                             )
     # file_names = ["FerryLink","FerryNode","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
-    file_names = ["FerryLink","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
+    file_names = ["FerryLink","FerryNode","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
     for fn in file_names:
         dfs = []
         for root, dirs, files in os.walk(folder_name):
