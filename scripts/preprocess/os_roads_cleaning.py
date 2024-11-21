@@ -17,8 +17,7 @@ def main(config):
                             "incoming_data",
                             "MasterMap Highways Network_roads_5731659"
                             )
-    # file_names = ["FerryLink","FerryNode","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
-    file_names = ["FerryLink"]
+    file_names = ["FerryLink","FerryNode","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
     for fn in file_names:
         dfs = []
         for root, dirs, files in os.walk(folder_name):
@@ -28,9 +27,6 @@ def main(config):
                         df = gpd.read_file(f, driver='GML')
                         print (df)
                         dfs.append(df)
-                        # df = pd.read_csv(f,sep=" ",header=[0])
-                        # dfs.append(df)
-                        # print (f.read())
 
         
         dfs = pd.concat(dfs,axis=0,ignore_index=True)
