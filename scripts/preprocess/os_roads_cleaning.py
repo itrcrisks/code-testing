@@ -17,7 +17,8 @@ def main(config):
                             "incoming_data",
                             "MasterMap Highways Network_roads_5731659"
                             )
-    file_names = ["FerryLink","FerryNode","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
+    # file_names = ["FerryLink","FerryNode","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
+    file_names = ["FerryLink"]
     for fn in file_names:
         dfs = []
         for root, dirs, files in os.walk(folder_name):
@@ -25,8 +26,9 @@ def main(config):
                 if file.startswith(f"Highways_Roads_{fn}") and file.endswith(".gz"):
                     with gzip.open(os.path.join(folder_name,file), 'rb') as f:
                         # dfs.append(gpd.read_file(f, driver='GML'))
-                        df = pd.read_csv(f,sep=" ",header=[0])
-                        dfs.append(df)
+                        # df = pd.read_csv(f,sep=" ",header=[0])
+                        # dfs.append(df)
+                        print (f.read())
 
         
         dfs = pd.concat(dfs,axis=0,ignore_index=True)
