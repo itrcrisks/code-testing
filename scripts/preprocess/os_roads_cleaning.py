@@ -23,7 +23,7 @@ def main(config):
         dfs = []
         for root, dirs, files in os.walk(folder_name):
             for file in files:
-                if file.startswith(f"Highways_Roads_{fn}") and file.endswith(".gz"):
+                if file.startswith(f"Highways_Roads_{fn}_") and file.endswith(".gz"):
                     print (file)
                     with gzip.open(os.path.join(folder_name,file), 'rb') as f:
                         df = gpd.read_file(f, driver='GML')
