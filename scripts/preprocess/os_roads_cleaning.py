@@ -24,7 +24,10 @@ def main(config):
             for file in files:
                 if file.startswith(f"Highways_Roads_{fn}") and file.endswith(".gz"):
                     with gzip.open(os.path.join(folder_name,file), 'rb') as f:
-                        dfs.append(gpd.read_file(f, driver='GML'))
+                        # dfs.append(gpd.read_file(f, driver='GML'))
+                        df = pd.read_csv(f,sep=" ",header=[0])
+                        dfs.append(df)
+
         
         dfs = pd.concat(dfs,axis=0,ignore_index=True)
 
