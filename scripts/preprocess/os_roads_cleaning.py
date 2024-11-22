@@ -19,6 +19,7 @@ def main(config):
                             )
     # file_names = ["FerryLink","FerryNode","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
     file_names = ["FerryLink","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
+    fix_cols = ["roadName","alternateName"]
     for fn in file_names:
         dfs = []
         for root, dirs, files in os.walk(folder_name):
@@ -33,8 +34,9 @@ def main(config):
         dfs = pd.concat(dfs,axis=0,ignore_index=True)
         print (fn)
         print (dfs)
-        if "roadName" in dfs.columns.values.tolist():
-            dfs["roadName"] = dfs["roadName"].astype(str)
+        for fx_col in fix_cols:
+            if fx_col in dfs.columns.values.tolist():
+                dfs[fx_col] = dfs[fx_col].astype(str)
         
         dfs.to_parquet(os.path.join(folder_name,f"GB_{fn}.pq"))
 
