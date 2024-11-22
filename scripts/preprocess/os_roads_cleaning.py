@@ -18,7 +18,8 @@ def main(config):
                             "MasterMap Highways Network_roads_5731659"
                             )
     # file_names = ["FerryLink","FerryNode","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
-    file_names = ["FerryLink","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
+    # file_names = ["FerryLink","FerryTerminal","Road","RoadJunction","RoadLink","RoadNode","Street"]
+    file_names = ["RoadLink","RoadNode","Street"]
     fix_cols = ["roadName","alternateName"]
     for fn in file_names:
         dfs = []
