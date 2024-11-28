@@ -614,20 +614,20 @@ def create_igraph_network(
 ]:
     road_links["edge_length_m"] = road_links.geometry.length * cons.CONV_METER_TO_MILE
     road_links["time_hr"] = 1.0*road_links.edge_length_m/road_links.initial_flow_speeds
-    road_links["voc"] = np.vectorize(voc_func, otypes=None)(road_links.initial_flow_speeds)
-    road_links[["weight","time_cost","operating_cost"]] = np.vectorize(cost_func, otypes=None)(
+    road_links["edge_voc"] = np.vectorize(voc_func, otypes=None)(road_links.initial_flow_speeds)
+    road_links[["weight","edge_vot","edge_toll"]] = np.vectorize(cost_func, otypes=None)(
                             road_links["time_hr"],road_links["edge_length_m"], 
-                            road_links["voc"], road_links["average_toll_cost"]
+                            road_links["edge_voc"], road_links["average_toll_cost"]
                         )
     # If you make sure your dataframe has first 2 columns as from_id and to_id
     # Then the igraph object is created directly from the dataframe 
-    graph_dataframe = road_links[["from_id","to_id","e_id","weight"]]
+    graph_dataframe = road_links[["from_id","to_id","e_id","edge_voc","edge_vot","edge_toll","weight"]]
     test_net = ig.Graph.TupleList(
                     graph_dataframe.itertuples(index=False),
                     edge_attrs=list(graph_dataframe.columns)[2:],
                     directed=False
                 )
-    return (test_net,road_links)
+    return (test_net,road_links[["e_id","edge_voc","edge_vot","edge_toll"]])
 
 ######################################################################################################
     return (
@@ -879,17 +879,32 @@ def find_least_cost_path(
         output="epath",
     )
     edge_paths = []
+    voc_costs = []
+    vot_costs = []
+    toll_costs = []
     for path in paths:
         edge_path = []
+        voc_cost = []
+        vot_cost = []
+        toll_cost = []
         for p in path:
-            edge_path.append(shared_network.es[p]["edge_name"])
+            edge_path.append(shared_network.es[p]["e_id"])
+            voc_cost.append(shared_network.es[p]["edge_voc"])
+            vot_cost.append(shared_network.es[p]["edge_vot"])
+            toll_cost.append(shared_network.es[p]["edge_toll"])
         edge_paths.append(edge_path)
+        voc_costs.append(sum(voc_cost))
+        vot_costs.append(sum(vot_cost))
+        toll_costs.append(sum(toll_cost))
 
     return (
         idx_of_origin_node,
         list_of_idx_destination_nodes,
         edge_paths,
         # paths,
+        voc_costs,
+        vot_costs,
+        toll_costs,
         flows,
     )
 
@@ -971,12 +986,19 @@ def worker_init_edge(shared_network_pkl: bytes, shared_weight_pkl: bytes) -> Non
     return None
 
 
+######################################################################################################
+# Comments and changes to the function are below
+######################################################################################################
+
 def network_flow_model(
-    road_links: gpd.GeoDataFrame,
-    road_nodes: gpd.GeoDataFrame,
-    list_of_origins: List[str],
-    supply_dict: Dict[str, List[float]],
-    destination_dict: Dict[str, List[str]],
+    road_links: gpd.GeoDataFrame, # Original road network
+    od_dataframe: gpd.GeoDataFrame, # OD dataframe
+    origin_id_column: str, # Name of the origin column in the OD dataframe
+    destination_id_column: str, # Name of the destination column in the OD dataframe 
+    flow_column: str,  # Name of the flow column in the OD dataframe
+    # list_of_origins: List[str],
+    # supply_dict: Dict[str, List[float]],
+    # destination_dict: Dict[str, List[str]],
     free_flow_speed_dict: Dict[str, float],
     flow_breakpoint_dict: Dict[str, float],
     flow_capacity_dict: Dict[str, float],
@@ -1021,6 +1043,7 @@ def network_flow_model(
     odpfc: pd.DataFrame
         The full od outputs: origins, destinations, paths, flows, costs.
     """
+    
     # initialise road links by adding columns: initial_flow_speeds,
     # acc-flow, acc-capacity, acc-speed
     road_links, initial_speed_dict = edge_init(
@@ -1040,15 +1063,22 @@ def network_flow_model(
     assert "acc_speed" in road_links.columns, "acc_speed column not exists!"
 
     # network creation (igraph)
+    # (
+    #     network,
+    #     edge_cost_dict,
+    #     edge_timeC_dict,
+    #     edge_operateC_dict,
+    #     edge_toll_dict,
+    #     edge_compc_df,
+    # ) = create_igraph_network(
+    #     road_links, road_nodes
+    # )  # this returns a network and edge weights dict(edge_name, edge_weight)
+
     (
         network,
-        edge_cost_dict,
-        edge_timeC_dict,
-        edge_operateC_dict,
-        edge_toll_dict,
         edge_compc_df,
     ) = create_igraph_network(
-        road_links, road_nodes
+        road_links
     )  # this returns a network and edge weights dict(edge_name, edge_weight)
     partial_speed_flow_func = partial(
         speed_flow_func,
@@ -1061,37 +1091,49 @@ def network_flow_model(
     operating_cost = 0
     toll_cost = 0
 
-    total_remain = sum(sum(values) for values in supply_dict.values())
+    # total_remain = sum(sum(values) for values in supply_dict.values())
+    total_remain = od_dataframe[flow_column].sum()
     print(f"The initial total supply is {total_remain}")
-    number_of_edges = len(list(network.es))
+    # number_of_edges = len(list(network.es))
+    number_of_edges = len(road_links.index)
     print(f"The initial number of edges in the network: {number_of_edges}")
-    print(f"The initial number of origins: {len(list_of_origins)}")
-    number_of_destinations = sum(len(value) for value in destination_dict.values())
+    number_of_origins = len(list(set(od_dataframe[origin_id_column].values.tolist())))
+    print(f"The initial number of origins: {number_of_origins}")
+    # number_of_destinations = sum(len(value) for value in destination_dict.values())
+    number_of_destinations = len(od_dataframe.index)
     print(f"The initial number of destinations: {number_of_destinations}")
 
+    ######################################################################################################
+    # I am not sure why these dictionaries have been created
+    # All this information is already into the DataFrame
     # road link properties
-    edge_cbtype_dict = road_links.set_index("e_id")["combined_label"].to_dict()
-    edge_length_dict = (
-        road_links.set_index("e_id")["geometry"].length * cons.CONV_METER_TO_MILE
-    ).to_dict()
-    acc_flow_dict = road_links.set_index("e_id")["acc_flow"].to_dict()
-    acc_capacity_dict = road_links.set_index("e_id")["acc_capacity"].to_dict()
-    acc_speed_dict = road_links.set_index("e_id")["acc_speed"].to_dict()
+    # edge_cbtype_dict = road_links.set_index("e_id")["combined_label"].to_dict()
+    # edge_length_dict = (
+    #     road_links.set_index("e_id")["geometry"].length * cons.CONV_METER_TO_MILE
+    # ).to_dict()
+    # acc_flow_dict = road_links.set_index("e_id")["acc_flow"].to_dict()
+    # acc_capacity_dict = road_links.set_index("e_id")["acc_capacity"].to_dict()
+    # acc_speed_dict = road_links.set_index("e_id")["acc_speed"].to_dict()
+
+    ######################################################################################################
 
     # starts
     iter_flag = 1
     isolated_flow_dict = defaultdict(float)
-    odpfc = pd.DataFrame(
-        columns=[
-            "origin",
-            "destination",
-            "path",
-            "flow",
-            "unit_od_voc",
-            "unit_od_vot",
-            "unit_od_toll",
-        ]
-    )
+
+    # odpfc = pd.DataFrame(
+    #     columns=[
+    #         "origin",
+    #         "destination",
+    #         "path",
+    #         "unit_od_voc",
+    #         "unit_od_vot",
+    #         "unit_od_toll",
+    #         "flow",
+    #     ]
+    # )
+    odpfc = []
+    unassigned_flows = [] 
     while total_remain > 0:
         print(f"No.{iter_flag} iteration starts:")
         # dump the network and edge weight for shared use in multiprocessing
@@ -1101,19 +1143,32 @@ def network_flow_model(
         # find the least-cost for each OD trip
         list_of_spath = []
         args = []
-        for i in range(len(list_of_origins)):
-            name_of_origin_node = list_of_origins[i]
-            list_of_name_destination_node = destination_dict[
-                name_of_origin_node
-            ]  # a list of destination nodes
-            list_of_flows = supply_dict[name_of_origin_node]
-            args.append(
-                (
-                    name_of_origin_node,
-                    list_of_name_destination_node,
-                    list_of_flows,
-                )
-            )
+        ######################################################################################################
+        # This bit of code will be extremely slow
+        # You are looping twice over the OD dataframe by first extracting infomration as dictionaries
+        # And then looping over the dictionaries
+        # I have simplified it to be in one loop
+
+        # for i in range(len(list_of_origins)):
+        #     name_of_origin_node = list_of_origins[i]
+        #     list_of_name_destination_node = destination_dict[
+        #         name_of_origin_node
+        #     ]  # a list of destination nodes
+        #     list_of_flows = supply_dict[name_of_origin_node]
+        #     args.append(
+        #         (
+        #             name_of_origin_node,
+        #             list_of_name_destination_node,
+        #             list_of_flows,
+        #         )
+        #     )
+        ######################################################################################################
+        list_of_origin_nodes = list(set(od_dataframe[origin_id_column].values.tolist()))
+        od_dataframe = od_dataframe.set_index(origin_id_column)
+        for origin in list_of_origin_nodes:
+            destinations = od_dataframe.loc[[origin], destination_id_column].values.tolist()
+            args.appped(origin,destinations)
+
         st = time.time()
         with Pool(
             processes=1,  #!!! update the required number of CPU
@@ -1124,56 +1179,113 @@ def network_flow_model(
             # [origin(name), destinations(name), path(idx), flow(int)]
         print(f"The least-cost path flow allocation time: {time.time() - st}.")
 
+        # I am not sure if the explode thing is needed below
         temp_flow_matrix = pd.DataFrame(
             list_of_spath,
             columns=[
-                "origin",
-                "destination",
+                origin_id_column,
+                destination_id_column,
                 "path",
-                "flow",
+                "unit_od_voc", 
+                "unit_od_vot", 
+                "unit_od_toll",
+                "flow"
             ],
-        ).explode(["destination", "path", "flow"])
+        ).explode([destination_id_column,"path","unit_od_voc","unit_od_vot","unit_od_toll","flow"])
 
+        # You can just merge with the original OD matrix that way you have the paths,flows and costs together
+        temp_flow_matrix = pd.merge(
+                                temp_flow_matrix
+                                od_dataframe,
+                                how="left",
+                                on=[origin_id_column,destination_id_column]
+                                )
+
+        ######################################################################################################
+        # This bit of code again looks to be slow and unnecessary
+        # You are looping again along the OD matrix (Using iterrows, which is slow!)
+        # You could have just got the cost values in the previous loop, while you extracted the network paths
+        # I have done that now, so this section of code is not needed   
+        
         # compute the total travel cost for each OD trip
-        st = time.time()
-        args = []
-        args = [row["path"] for _, row in temp_flow_matrix.iterrows()]
-        with Pool(
-            processes=1,  #!!! update the required number of CPU
-            initializer=worker_init_edge,
-            initargs=(shared_network_pkl, shared_weight_pkl),
-        ) as pool:
-            temp_flow_matrix[["unit_od_voc", "unit_od_vot", "unit_od_toll"]] = pool.map(
-                compute_edge_costs, args
-            )
-        print(f"The computational time for OD costs: {time.time() - st}.")
+        # st = time.time()
+        # args = []
+        # args = [row["path"] for _, row in temp_flow_matrix.iterrows()]
+        # with Pool(
+        #     processes=1,  #!!! update the required number of CPU
+        #     initializer=worker_init_edge,
+        #     initargs=(shared_network_pkl, shared_weight_pkl),
+        # ) as pool:
+        #     temp_flow_matrix[["unit_od_voc", "unit_od_vot", "unit_od_toll"]] = pool.map(
+        #         compute_edge_costs, args
+        #     )
+        # print(f"The computational time for OD costs: {time.time() - st}.")
+        ######################################################################################################
+
+        ######################################################################################################
+        # I do not think it is a good idea to concatenate within a loop
+        # It is slow
+        # Also at this stage you simply have the full OD assignment done, without any capacity constraints
+        # So doing a groupby to your OD does not add ay value
 
         # save the mid-outputs: origin, destination, path,
-        odpfc = pd.concat([odpfc, temp_flow_matrix], axis=0, ignore_index=True)
-        odpfc.path = odpfc.path.apply(tuple)
-        odpfc = odpfc.groupby(["origin", "destination", "path"], as_index=False).agg(
-            {
-                "flow": "sum",
-                "unit_od_voc": "first",  # vehicle operational cost (per trip)
-                "unit_od_vot": "first",  # value of time (per trip)
-                "unit_od_toll": "first",  # toll cost (per trip)
-            }
-        )
+        # odpfc = pd.concat([odpfc, temp_flow_matrix], axis=0, ignore_index=True)
+        # odpfc.path = odpfc.path.apply(tuple)
+        # odpfc = odpfc.groupby(["origin", "destination", "path"], as_index=False).agg(
+        #     {
+        #         "flow": "sum",
+        #         "unit_od_voc": "first",  # vehicle operational cost (per trip)
+        #         "unit_od_vot": "first",  # value of time (per trip)
+        #         "unit_od_toll": "first",  # toll cost (per trip)
+        #     }
+        # )
+        ######################################################################################################
 
+        ######################################################################################################
+        # I have modified the updated_od_matrix(), which should now give the unassigned and assinged flows
         # calculate the non-allocated flows and remaining flows
+        # (
+        #     temp_flow_matrix,
+        #     list_of_origins,
+        #     supply_dict,
+        #     destination_dict,
+        # ) = update_od_matrix(
+        #     temp_flow_matrix, supply_dict, destination_dict, isolated_flow_dict
+        # )
+        ######################################################################################################
+
+
         (
+            isolated_flow_matrix,
             temp_flow_matrix,
-            list_of_origins,
-            supply_dict,
-            destination_dict,
         ) = update_od_matrix(
-            temp_flow_matrix, supply_dict, destination_dict, isolated_flow_dict
+            temp_flow_matrix
         )
-        number_of_destinations = sum(len(value) for value in destination_dict.values())
-        print(f"The remaining number of origins: {len(list_of_origins)}")
+        # This is just to store the unassigned flows in a list which we concat later outside the loop
+        unassigned_flows.append(
+                        isolated_flow_matrix[
+                                [
+                                    origin_id_column,
+                                    destination_id_column,
+                                    flow_column
+                                ]
+                                ]
+                        )
+        
+        ######################################################################################################
+        # number_of_destinations = sum(len(value) for value in destination_dict.values())
+        # print(f"The remaining number of origins: {len(list_of_origins)}")
+        # print(f"The remaining number of destinations: {number_of_destinations}")
+        # total_remain = sum(sum(values) for values in supply_dict.values())
+        ######################################################################################################
+
+        total_remain = temp_flow_matrix[flow_column].sum()
+        print(f"The initial total supply is {total_remain}")
+        number_of_origins = len(list(set(temp_flow_matrix[origin_id_column].values.tolist())))
+        print(f"The remaining number of origins: {number_of_origins}")
+        number_of_destinations = len(temp_flow_matrix.index)
         print(f"The remaining number of destinations: {number_of_destinations}")
 
-        total_remain = sum(sum(values) for values in supply_dict.values())
         if total_remain == 0:
             print("Iteration stops: there is no remaining flows!")
             break

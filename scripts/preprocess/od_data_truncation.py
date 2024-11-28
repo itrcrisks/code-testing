@@ -27,10 +27,11 @@ def truncate_by_threshold(flow_dataframe, flow_column='flux', threshold=.99):
 def main(config):
     incoming_data_path = config['paths']['incoming_data']
     data_path = config['paths']['data']
-    
+
     od_df = pd.read_csv(os.path.join(data_path,"census_datasets","od_gb_oa_2021.csv"))
     od_df = od_df[od_df["Car21"] > 0]
     
+    result = od_df.groupby("Area of usual residence")["Car21"].apply(list).to_dict()
     od_df = od_df.sort_values(by=["Car21"],ascending=False)
     od_df["car_total"] = od_df.groupby(["Area of usual residence"])["Car21"].transform("sum")
     od_df["car_cumsum"] = od_df.groupby(["Area of usual residence"])["Car21"].transform("cumsum")
