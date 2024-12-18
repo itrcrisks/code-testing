@@ -161,7 +161,7 @@ def create_network(
     network = snkit.network.add_endpoints(network)
 
     # logging.info("Splitting edges at nodes")
-    # network = snkit.network.split_edges_at_nodes(network)
+    network = snkit.network.split_edges_at_nodes(network)
 
     # check we have only linestrings
     assert set(network.edges.geometry.type.values) == {"LineString"}
@@ -173,6 +173,22 @@ def create_network(
     network = snkit.network.add_topology(network, id_col="id")
 
     return network
+
+def create_igraph_from_dataframe(graph_dataframe, directed=False, simple=False):
+    graph = ig.Graph.TupleList(
+        graph_dataframe.itertuples(index=False),
+        edge_attrs=list(graph_dataframe.columns)[2:],
+        directed=directed
+    )
+    if simple:
+        graph.simplify()
+
+    es, vs, simple = graph.es, graph.vs, graph.is_simple()
+    d = "directed" if directed else "undirected"
+    s = "simple" if simple else "multi"
+
+    return graph
+
 def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,snap_distance=None,by=None):
     edges.columns = map(str.lower, edges.columns)
     if "id" in edges.columns.values.tolist():

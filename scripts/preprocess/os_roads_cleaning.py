@@ -26,7 +26,7 @@ def assign_lanes_to_roads(x,rc_column,fw_column,lane_width,shoulder_width,collap
         else:
             lanes += 1
 
-        if x[fw_column] == "Motorway":
+        if x[rc_column] == "Motorway":
             lanes = max(lanes,4)
     else:
         if (x[fw_column] == "Single Carriageway") and (lanes % 2 != 0):
